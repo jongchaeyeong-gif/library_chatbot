@@ -20,7 +20,10 @@ from langchain_community.chat_message_histories.streamlit import StreamlitChatMe
 
 __import__('pysqlite3')
 import sys
-sys.modules['sqlite3'] = sys.modules.pop('pysqlite3')
+# --- 💖 수정된 부분: pysqlite3가 sys.modules에 있는지 확인하고 안전하게 치환해요!
+if 'pysqlite3' in sys.modules:
+    sys.modules['sqlite3'] = sys.modules.pop('pysqlite3')
+# --- 💖 수정 완료!
 from langchain_chroma import Chroma
 
 
