@@ -34,6 +34,7 @@ except Exception as e:
 #cache_resource로 한번 실행한 결과 캐싱해두기
 @st.cache_resource
 def load_and_split_pdf(file_path):
+    # PDF 파일 로더
     loader = PyPDFLoader(file_path)
     return loader.load_and_split()
 
@@ -81,7 +82,15 @@ def get_vectorstore(_docs):
 # PDF 문서 로드-벡터 DB 저장-검색기-히스토리 모두 합친 Chain 구축
 @st.cache_resource
 def initialize_components(selected_model):
-    file_path = "[챗봇프로그램및실습] 미세먼지 분석 및 대응 방안 보고서.pdf"
+    # 미세먼지 보고서 PDF 파일 경로로 변경
+    file_path = "미세먼지 분석 및 대응 방안 보고서.pdf"
+    
+    # 이 부분은 실제 환경에서 PDF 파일이 존재해야 합니다.
+    if not os.path.exists(file_path):
+        st.error(f"⚠️ 파일 경로를 확인해주세요! 미세먼지 보고서 PDF 파일({file_path})을 찾을 수 없습니다.")
+        # 더미 파일 경로를 사용하거나 실행을 중단할 수 있습니다. 여기서는 경고만 표시합니다.
+        # st.stop() 
+
     pages = load_and_split_pdf(file_path)
     vectorstore = get_vectorstore(pages)
     retriever = vectorstore.as_retriever()
@@ -99,12 +108,13 @@ def initialize_components(selected_model):
         ]
     )
 
-    # 질문-답변 시스템 프롬프트
-    qa_system_prompt = """You are an assistant for question-answering tasks. \
+    # 질문-답변 시스템 프롬프트 (귀여운 스타일로 변경)
+    qa_system_prompt = """You are an assistant for question-answering tasks, specializing in fine dust issues based on the provided Korean report. \
+    You MUST adopt a very friendly, supportive, and cute personality, suitable for children under 18. \
     Use the following pieces of retrieved context to answer the question. \
     If you don't know the answer, just say that you don't know. \
-    Keep the answer perfect. please use imogi with the answer.
-    대답은 한국어로 하고, 존댓말을 써줘.\
+    Keep the answer accurate and helpful. Please use many cute and relevant emojis (imogi) with the answer.
+    대답은 한국어로 하고, 아주 친절하고 상냥한 말투(반말도 괜찮아!)로 짧고 재미있게 답해줘. \
 
     {context}"""
     qa_prompt = ChatPromptTemplate.from_messages(
@@ -117,73 +127,3 @@ def initialize_components(selected_model):
 
     try:
         llm = ChatGoogleGenerativeAI(
-            model=selected_model,
-            temperature=0.7,
-            convert_system_message_to_human=True
-        )
-    except Exception as e:
-        st.error(f"❌ Gemini 모델 '{selected_model}' 로드 실패: {str(e)}")
-        st.info("💡 'gemini-pro' 모델을 사용해보세요.")
-        raise
-    history_aware_retriever = create_history_aware_retriever(llm, retriever, contextualize_q_prompt)
-    question_answer_chain = create_stuff_documents_chain(llm, qa_prompt)
-    rag_chain = create_retrieval_chain(history_aware_retriever, question_answer_chain)
-    return rag_chain
-
-# Streamlit UI
-st.header("국립부경대 도서관 규정 Q&A 챗봇 💬 📚")
-
-# 첫 실행 안내 메시지
-if not os.path.exists("./chroma_db"):
-    st.info("🔄 첫 실행입니다. 임베딩 모델 다운로드 및 PDF 처리 중... (약 5-7분 소요)")
-    st.info("💡 이후 실행에서는 10-15초만 걸립니다!")
-
-# Gemini 모델 선택 - 최신 2.x 모델 사용
-option = st.selectbox("Select Gemini Model",
-    ("gemini-2.5-flash", "gemini-2.5-pro", "gemini-2.0-flash-exp"),
-    index=0,
-    help="Gemini 2.5 Flash가 가장 빠르고 효율적입니다"
-)
-
-try:
-    with st.spinner("🔧 챗봇 초기화 중... 잠시만 기다려주세요"):
-        rag_chain = initialize_components(option)
-    st.success("✅ 챗봇이 준비되었습니다!")
-except Exception as e:
-    st.error(f"⚠️ 초기화 중 오류 발생: {str(e)}")
-    st.info("PDF 파일 경로와 API 키를 확인해주세요.")
-    st.stop()
-
-chat_history = StreamlitChatMessageHistory(key="chat_messages")
-
-conversational_rag_chain = RunnableWithMessageHistory(
-    rag_chain,
-    lambda session_id: chat_history,
-    input_messages_key="input",
-    history_messages_key="history",
-    output_messages_key="answer",
-)
-
-
-if "messages" not in st.session_state:
-    st.session_state["messages"] = [{"role": "assistant", 
-                                     "content": "국립부경대 도서관 규정에 대해 무엇이든 물어보세요!!!!!"}]
-
-for msg in chat_history.messages:
-    st.chat_message(msg.type).write(msg.content)
-
-
-if prompt_message := st.chat_input("Your question"):
-    st.chat_message("human").write(prompt_message)
-    with st.chat_message("ai"):
-        with st.spinner("Thinking..."):
-            config = {"configurable": {"session_id": "any"}}
-            response = conversational_rag_chain.invoke(
-                {"input": prompt_message},
-                config)
-            
-            answer = response['answer']
-            st.write(answer)
-            with st.expander("참고 문서 확인"):
-                for doc in response['context']:
-                    st.markdown(doc.metadata['source'], help=doc.page_content)
