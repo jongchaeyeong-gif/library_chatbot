@@ -127,3 +127,75 @@ def initialize_components(selected_model):
 
     try:
         llm = ChatGoogleGenerativeAI(
+            model=selected_model,
+            temperature=0.7,
+            convert_system_message_to_human=True
+        )
+    except Exception as e:
+        st.error(f"❌ Gemini 모델 '{selected_model}' 로드 실패: {str(e)}")
+        st.info("💡 'gemini-pro' 모델을 사용해보세요.")
+        raise
+    history_aware_retriever = create_history_aware_retriever(llm, retriever, contextualize_q_prompt)
+    question_answer_chain = create_stuff_documents_chain(llm, qa_prompt)
+    rag_chain = create_retrieval_chain(history_aware_retriever, question_answer_chain)
+    return rag_chain
+
+# Streamlit UI
+# 헤더/제목 변경
+st.header("✨ 귀여운 미세먼지 지킴이 챗봇! 💖")
+
+# 첫 실행 안내 메시지
+if not os.path.exists("./chroma_db"):
+    st.info("🔄 첫 실행입니다. 임베딩 모델 다운로드 및 PDF 처리 중... (약 5-7분 소요)")
+    st.info("💡 이후 실행에서는 10-15초만 걸립니다!")
+
+# Gemini 모델 선택 - 최신 2.x 모델 사용
+option = st.selectbox("Select Gemini Model",
+    ("gemini-2.5-flash", "gemini-2.5-pro", "gemini-2.0-flash-exp"),
+    index=0,
+    help="Gemini 2.5 Flash가 가장 빠르고 효율적입니다"
+)
+
+try:
+    with st.spinner("🔧 챗봇 초기화 중... 잠시만 기다려주세요"):
+        rag_chain = initialize_components(option)
+    st.success("✅ 챗봇이 준비되었습니다!")
+except Exception as e:
+    st.error(f"⚠️ 초기화 중 오류 발생: {str(e)}")
+    st.info("PDF 파일 경로와 API 키를 확인해주세요.")
+    st.stop()
+
+chat_history = StreamlitChatMessageHistory(key="chat_messages")
+
+conversational_rag_chain = RunnableWithMessageHistory(
+    rag_chain,
+    lambda session_id: chat_history,
+    input_messages_key="input",
+    history_messages_key="history",
+    output_messages_key="answer",
+)
+
+
+if "messages" not in st.session_state:
+    st.session_state["messages"] = [{"role": "assistant", 
+                                     # 초기 메시지 변경
+                                     "content": "안녕! 나는 귀여운 미세먼지 지킴이 챗봇이야! 🧚‍♀️ 미세먼지 궁금증을 전부 물어봐! 친절하고 상냥하게 알려줄게! 😊"}]
+
+for msg in chat_history.messages:
+    st.chat_message(msg.type).write(msg.content)
+
+
+if prompt_message := st.chat_input("궁금한 미세먼지 질문을 해봐! 🌈"):
+    st.chat_message("human").write(prompt_message)
+    with st.chat_message("ai"):
+        with st.spinner("생각 중... ✨"):
+            config = {"configurable": {"session_id": "any"}}
+            response = conversational_rag_chain.invoke(
+                {"input": prompt_message},
+                config)
+            
+            answer = response['answer']
+            st.write(answer)
+            with st.expander("참고 문서 확인"):
+                for doc in response['context']:
+                    st.markdown(doc.metadata['source'], help=doc.page_content)
