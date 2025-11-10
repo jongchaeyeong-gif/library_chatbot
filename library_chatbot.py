@@ -117,7 +117,7 @@ def initialize_components(selected_model):
     Use the following pieces of retrieved context to answer the question. \
     If you don't know the answer, just say that you don't know. \
     Keep the answer accurate and helpful. Please use many cute and relevant emojis (imogi) with the answer.
-    대답은 한국어로 하고, 아주 친절하고 상냥한 말투(반말도 괜찮아!)로 짧고 재미있게 답해줘. \
+    대답은 한국어로 하고, 아주 친절하고 상냥한 말투(반말도 괜찮아!)로 짧고 재미있게 답해줘 비유법 써줘 예시도 들어줘. \
 
     {context}"""
     qa_prompt = ChatPromptTemplate.from_messages(
