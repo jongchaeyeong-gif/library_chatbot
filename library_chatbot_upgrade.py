@@ -57,7 +57,7 @@ def create_vector_store(_docs):
         
     # 모든 페이지의 텍스트를 하나의 문자열로 합칩니다.
     full_text = "\n\n".join([doc.page_content for doc in _docs])
-    source_file = _docs[0].metadata.get("source", "부경대학교 규정집.pdf")
+    source_file = _docs[0].metadata.get("source", "미세먼지 분석 및 대응 방안 보고서.pdf")
 
     # '제' (공백*) 숫자 (공백*) '조' (공백*) (예: '제1조', '제 10 조')
     article_pattern = r'(제\s*\d+\s*조(?:의\s*\d+)?\s*\(.+?\))' # (괄호 안의 제목 포함)
